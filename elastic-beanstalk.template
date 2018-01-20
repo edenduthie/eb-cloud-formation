@@ -1,0 +1,139 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This template is intended to be deployed into an existing VPC with two public subnets. It will create an Elastic Beanstalk environment with ec2 instances in the private VPC subnets. **WARNING** This template creates Amazon EC2 instance and related resources. You will be billed for the AWS resources used if you create a stack from this template. QS(0037)",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VPCID",
+                        "PublicSubnet1ID",
+                        "PublicSubnet2ID",
+                        "PrivateSubnet1AID",
+                        "PrivateSubnet2AID",
+                        "BastionSecurityGroup"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Amazon EC2 Configuration"
+                    },
+                    "Parameters": [
+                        "KeyPairName"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "VPCID": {
+                    "default": "VPC ID"
+                },
+                "KeyPairName": {
+                    "default": "Key Pair Name"
+                },
+                "PublicSubnet1ID": {
+                    "default": "Public Subnet 1 ID"
+                },
+                "PublicSubnet2ID": {
+                    "default": "Public Subnet 2 ID"
+                },
+                "PrivateSubnet1AID": {
+                    "default": "Private Subnet 1A ID"
+                },
+                "PrivateSubnet2AID": {
+                    "default": "Private Subnet 2 ID"
+                },
+                "BastionSecurityGroup": {
+                    "default": "Bastion Security Group ID"
+                }
+            }
+        }
+    },
+    "Parameters": {
+        "VPCID": {
+            "Description": "ID of the VPC (e.g., vpc-0343606e)",
+            "Type": "AWS::EC2::VPC::Id"
+        },
+        "KeyPairName": {
+            "Description": "Enter a Public/private key pair. If you do not have one in this region, please create it before continuing",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "PublicSubnet1ID": {
+            "Description": "ID of the public subnet 1 that you want to provision the elastic beanstalk loadbalancer into",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PublicSubnet2ID": {
+            "Description": "ID of the public subnet 2 you want to provision the elastic beanstalk loadbalancer into",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PrivateSubnet1AID": {
+            "Description": "ID of the private subnet 1A for provisioning elastic beanstalk ec2 instances",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PrivateSubnet2AID": {
+            "Description": "ID of the private subnet 2A for provisioning elastic beanstalk ec2 instances",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "BastionSecurityGroup": {
+            "Description": "ID of the security group for the bastion instances",
+            "Type": "AWS::EC2::SecurityGroup::Id"
+        }
+    },
+    "Rules": {
+    },
+    "Mappings": {
+    },
+    "Conditions": {
+    },
+    "Resources": {
+        "BeanstalkSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "Allow the Elastic Beanstalk instances to access the NAT device",
+                 "VpcId" : { "Ref" : "VPCID" }
+            }
+        },
+        
+        "SampleApplication" : {
+            "Type" : "AWS::ElasticBeanstalk::Application",
+            "Properties" : {
+              "Description" : "AWS Elastic Beanstalk Docker Sample Application"
+            }
+        },
+
+        "SampleApplicationVersion" : {
+            "Type" : "AWS::ElasticBeanstalk::ApplicationVersion",
+            "Properties" : {
+              "Description" : "Version 1.0",
+              "ApplicationName" : { "Ref" : "SampleApplication" },
+              "SourceBundle" : {
+                  "S3Bucket" : "elastic-beanstalk-bastion-templates",
+                  "S3Key" : "docker-singlecontainer-v1.zip"
+                }
+            }
+        },
+
+        "ElasticBeanstalkEnvironment" : {
+            "Type" : "AWS::ElasticBeanstalk::Environment",
+            "Properties" : {
+                "ApplicationName" : { "Ref" : "SampleApplication" },
+                "Description" :  "AWS Elastic Beanstalk Environment running a Single Container Docker example",
+                "SolutionStackName" : "64bit Amazon Linux 2017.09 v2.8.4 running Docker 17.09.1-ce",
+                "VersionLabel" : { "Ref" : "SampleApplicationVersion" },
+                "OptionSettings" : [
+                    {"Namespace" : "aws:autoscaling:launchconfiguration", "OptionName" : "SSHSourceRestriction", "Value" : { "Fn::Join" : [ "", ["tcp,22,22,", { "Ref" : "BastionSecurityGroup" }]]}},
+                    {"Namespace" : "aws:autoscaling:launchconfiguration", "OptionName" : "SecurityGroups", "Value" : { "Ref" : "BeanstalkSecurityGroup" }},
+                    {"Namespace" : "aws:autoscaling:launchconfiguration", "OptionName" : "EC2KeyName", "Value" : { "Ref" : "KeyPairName" }},
+                    {"Namespace" : "aws:ec2:vpc", "OptionName" : "VPCId", "Value" : { "Ref" : "VPCID" }},
+                    {"Namespace" : "aws:ec2:vpc", "OptionName" : "Subnets", "Value" : { "Ref" : "PrivateSubnet1AID" }},
+                    {"Namespace" : "aws:ec2:vpc", "OptionName" : "ELBSubnets", "Value" : { "Ref" : "PublicSubnet1ID" }},
+                ]
+            }
+        }
+
+    },
+    "Outputs": {
+    }
+}
